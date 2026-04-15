@@ -25,7 +25,16 @@ jobs:
         run: docker-compose up -d
 
       - name: Wait for services
-        run: sleep 20
+        run: |
+          for i in {1..10}; do
+                curl -s http://localhost:8080 && break
+                echo "waiting..."
+                sleep 5
+          done
+
+      - name: Show logs
+        if: always()
+        run: docker-compose logs
 
       - name: Test service
         run: curl http://localhost:8080
