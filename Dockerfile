@@ -9,4 +9,4 @@ RUN pip install flask pymysql \
     --no-cache-dir \
     --progress-bar off
 
-CMD ["python", "app.py"]
+CMD ["python", "app/app.py"]
