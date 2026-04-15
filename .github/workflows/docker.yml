@@ -1,4 +1,4 @@
-name: Docker Compose CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,39 +6,24 @@ on:
       - main
 
 jobs:
-  build-and-run:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Docker Compose
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build image
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/flask-app:latest .
+
+      - name: Push image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+
+      - name: Run container test
         run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose
-
-      - name: Build Flask image
-        run: docker build -t flask-app .
-
-      - name: Start services
-        run: docker-compose up -d
-
-      - name: Wait for services
-        run: |
-          for i in {1..10}; do
-                curl -s http://localhost:8080 && break
-                echo "waiting..."
-                sleep 5
-          done
-
-      - name: Show logs
-        if: always()
-        run: docker-compose logs
-
-      - name: Test service
-        run: curl http://localhost:8080
-
-      - name: Show logs if failed
-        if: failure()
-        run: docker-compose logs
+          docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+          sleep 10
+          curl http://localhost:5000
