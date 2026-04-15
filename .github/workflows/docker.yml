@@ -18,16 +18,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-compose
 
+      - name: Build Flask image
+        run: docker build -t flask-app .
+
       - name: Start services
-        run: |
-          docker-compose up -d
+        run: docker-compose up -d
 
       - name: Wait for services
-        run: sleep 15
+        run: sleep 20
 
       - name: Test service
-        run: |
-          curl http://localhost:8080
+        run: curl http://localhost:8080
 
       - name: Show logs if failed
         if: failure()
