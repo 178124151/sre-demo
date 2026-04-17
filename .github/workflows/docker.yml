@@ -32,7 +32,7 @@ jobs:
             -e MYSQL_DATABASE=app_db \
             mysql:8.0
 
-          sleep 15
+          sleep 60
 
           docker run -d --name flask \
             --network test-net \
