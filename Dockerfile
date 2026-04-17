@@ -2,11 +2,11 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY . /app
+COPY app/requirements.txt .
 
-RUN pip install flask pymysql \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    --no-cache-dir \
-    --progress-bar off
+RUN pip install -r requirements.txt
 
-CMD ["python", "app/app.py"]
+COPY app/ .
+
+CMD ["python", "app.py"]
+
