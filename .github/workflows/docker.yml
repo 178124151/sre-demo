@@ -24,6 +24,25 @@ jobs:
 
       - name: Run container test
         run: |
-          docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+          docker network create test-net
+
+          docker run -d --name mysql \
+            --network test-net \
+            -e MYSQL_ROOT_PASSWORD=root123 \
+            -e MYSQL_DATABASE=app_db \
+            mysql:8.0
+
+          sleep 15
+
+          docker run -d --name flask \
+            --network test-net \
+            -p 5000:5000 \
+            -e DB_HOST=mysql \
+            -e DB_USER=root \
+            -e DB_PASSWORD=root123 \
+            -e DB_NAME=app_db \
+            ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+
           sleep 10
-          curl http://localhost:5000
+
+          curl http://localhost:5000/health
