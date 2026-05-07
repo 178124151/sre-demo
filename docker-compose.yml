@@ -1,0 +1,128 @@
+services:
+  mysql:
+    image: crpi-66keoo1dnrvicmgo.cn-qingdao.personal.cr.aliyuncs.com/luci-ducker/mysql57:5.7
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-appdb}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend
+
+  flask1:
+    build: ./web
+    image: flask-app
+    container_name: flask1
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${MYSQL_USER:-appuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE:-appdb}
+      INSTANCE_ID: flask1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+
+  flask2:
+    build: ./web
+    image: flask-app
+    container_name: flask2
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${MYSQL_USER:-appuser}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_NAME: ${MYSQL_DATABASE:-appdb}
+      INSTANCE_ID: flask2
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+
+  nginx:
+    image: crpi-66keoo1dnrvicmgo.cn-qingdao.personal.cr.aliyuncs.com/luci-ducker/sre-nginx:v1
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      flask1:
+        condition: service_healthy
+      flask2:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+
+  prometheus:
+    image: crpi-66keoo1dnrvicmgo.cn-qingdao.personal.cr.aliyuncs.com/luci-ducker/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'   # 只保留 7 天数据，省磁盘
+      - '--web.enable-lifecycle'
+    networks:
+      - backend
+
+  grafana:
+    image: crpi-66keoo1dnrvicmgo.cn-qingdao.personal.cr.aliyuncs.com/luci-ducker/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - backend
+
+volumes:
+  mysql_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  frontend:
+  backend:
+
