@@ -1,11 +1,14 @@
 global:
   scrape_interval: 15s
 
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
 scrape_configs:
   - job_name: 'flask-instances'
-    static_configs:
-      - targets: ['web1:5000', 'web2:5000']   # 对应你 compose 里的容器名
     metrics_path: '/metrics'
+    static_configs:
+      - targets: ['flask1:5000', 'flask2:5000']
 
   - job_name: 'node'
     static_configs:
@@ -13,4 +16,4 @@ scrape_configs:
 
   - job_name: 'nginx'
     static_configs:
-      - targets: ['nginx-exporter:9113']       # 需要 compose 里加这个服务
+      - targets: ['nginx-exporter:9113']

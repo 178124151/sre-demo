@@ -1,9 +1,6 @@
-# 敏感文件
 .env
-
-# 数据库和监控的运行时数据（体积大，不需要上传）
 data/
-
-# Python缓存
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/

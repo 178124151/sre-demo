@@ -1,20 +1,29 @@
 groups:
-- name: sre_demo
-  rules:
-  - alert: ServiceDown
-    expr: up == 0
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: "服务 {{ $labels.job }} 已宕机"
-      description: "{{ $labels.job }} 服务已经停止超过1分钟"
-  
-  - alert: HighCPUUsage
-    expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-    for: 2m
-    labels:
-      severity: warning
-    annotations:
-      summary: "CPU使用率过高"
-      description: "服务器CPU使用率超过80%，当前值: {{ $value }}%"
+  - name: sre_demo
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage is high"
+          description: "CPU usage has been above 80% for 2 minutes. Current value: {{ $value }}%."
+
+      - alert: HighHttp5xxRate
+        expr: sum(rate(flask_http_request_total{status=~"5.."}[5m])) / sum(rate(flask_http_request_total[5m])) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx error rate is high"
+          description: "More than 5% of requests have returned 5xx responses over the last 5 minutes."

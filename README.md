@@ -1,106 +1,109 @@
-# SRE Demo — 高可用 Flask 服务
+# SRE Demo
 
-> 基于 Docker Compose 的可观测性实践项目，涵盖负载均衡、健康检查、监控告警全链路。
+一个面向 SRE/运维实习投递的演示项目：用一个小型 Web 服务，把负载均衡、健康检查、可观测性、告警、Runbook 和资源取舍串成一条完整链路。
 
+项目最初运行在一台 2C2G 的阿里云服务器上，因此主部署方式选择了 `Docker Compose`。这次整理保留了这条更符合真实资源约束的落地路径，同时补上 `Kubernetes` 清单、`SLO`、告警规则和演示文档，让它既能讲“怎么跑”，也能讲“怎么运维”。
+
+## Project Snapshot
+
+- 网关：Nginx 反向代理 + `least_conn` 负载均衡
+- 应用：Flask + Gunicorn，暴露 `/health`、`/ready`、`/metrics`
+- 存储：MySQL 5.7
+- 监控：Prometheus + Grafana
+- 编排：Docker Compose + Kubernetes Kustomize overlays
+- 运维资产：告警规则、SLO、Runbook、自测脚本、CI 校验
+
+## Architecture
+
+```mermaid
+flowchart LR
+    user["User"] --> nginx["Nginx"]
+    nginx --> flask1["Flask instance 1"]
+    nginx --> flask2["Flask instance 2"]
+    flask1 --> mysql["MySQL"]
+    flask2 --> mysql
+    prometheus["Prometheus"] --> flask1
+    prometheus --> flask2
+    prometheus --> nginxExporter["Nginx exporter"]
+    prometheus --> nodeExporter["Node exporter"]
+    grafana["Grafana"] --> prometheus
 ```
-Internet
-    │
-  Nginx  ←── 负载均衡 / 健康剔除
-  ┌─┴─┐
-Flask1  Flask2   ←── 双实例，最少连接算法
-  └─┬─┘
- MySQL              ←── 持久化存储
-    │
-Prometheus ──→ Grafana   ←── 指标采集 + 可视化
-```
 
-## 技术栈
+## Why This Project Is Worth Showing
 
-| 层次 | 组件         | 用途                                 |
-| ---- | ------------ | ------------------------------------ |
-| 网关 | Nginx Alpine | 反向代理、负载均衡、访问日志（JSON） |
-| 应用 | Flask × 2    | 业务逻辑，暴露 `/metrics` 端点       |
-| 存储 | MySQL 5.7    | 关系型数据，Volume 持久化            |
-| 采集 | Prometheus   | 15s 间隔拉取指标，保留 7 天          |
-| 展示 | Grafana      | 实时 Dashboard，告警规则             |
+- 不只是把服务跑起来，而是把“服务如何被观测、告警、排障”一起补齐。
+- 不硬上 Kubernetes，而是把 2C2G 单机的资源现实讲清楚，再给出可验证的迁移路径。
+- 不只写代码，也补了 Dashboard provisioning、SLO、Runbook 和配置校验，让仓库更接近真实团队资产。
 
-## 快速开始
+## Quick Start
+
+### Docker Compose
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/<your-username>/sre-demo.git && cd sre-demo
-
-# 2. 配置环境变量（不要把真实密码提交到 Git）
 cp .env.example .env
-vim .env
-
-# 3. 一键启动
-docker-compose up -d
-
-# 4. 验证服务
-curl localhost:8080/health          # 应用健康检查
-curl localhost:8080/                # 业务接口
-open http://localhost:3000          # Grafana（admin / 见 .env）
-open http://localhost:9090          # Prometheus
+docker compose up -d --build
+curl http://localhost:8080/health
+curl http://localhost:8080/users
 ```
 
-## 项目结构
+入口：
 
-```
-sre-demo/
-├── docker-compose.yml       # 服务编排主文件
-├── .env.example             # 环境变量模板（不含真实密码）
-├── nginx/
-│   └── nginx.conf           # upstream 池 + JSON 访问日志
-├── mysql/
-│   └── init.sql             # 初始化 DDL
-├── app/
-│   ├── Dockerfile
-│   └── app.py               # Flask 应用（含 /health /metrics）
-└── monitoring/
-    ├── prometheus.yml        # 抓取配置
-    └── grafana/
-        └── provisioning/    # Dashboard 自动导入
+- Web: `http://localhost:8080`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+Windows 下可以直接运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
 ```
 
-## 关键设计决策
-
-**为什么用 `least_conn` 而不是默认的轮询？**
-轮询假设每个请求耗时相同，而真实场景中慢请求会堆积在某个实例上。`least_conn` 将新连接路由到当前活跃连接最少的实例，在请求耗时不均时表现更好。
-
-**为什么 MySQL 密码不放在 `docker-compose.yml` 里？**
-硬编码密码一旦仓库设为 public 就会泄露。通过 `.env` 文件注入，并在 `.gitignore` 中排除，是 12-Factor App 的标准做法。
-
-**为什么 Prometheus 只保留 7 天？**
-阿里云 2C2G 服务器磁盘有限。7 天足够排查大多数线上问题，超出部分可导出到对象存储（OSS）归档。
-
-**healthcheck `start_period` 的意义？**
-MySQL 启动需要约 20-30s 初始化数据目录，没有 `start_period` 时健康检查会连续失败并触发重启循环（restart loop）。`start_period: 30s` 让容器在这段时间内的失败不计入重试次数。
-
-## 可观测性
-
-服务启动后，Grafana 自动导入以下 Dashboard：
-
-- **请求速率（RPS）**：`rate(http_requests_total[1m])`
-- **错误率**：`rate(http_requests_total{status=~"5.."}[1m])`
-- **P99 延迟**：`histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))`
-- **实例存活**：`up{job="flask-instances"}`
-
-## 压测验证
+### Kubernetes Demo
 
 ```bash
-# 安装 hey（轻量 HTTP 压测工具）
-go install github.com/rakyll/hey@latest
-
-# 100 并发，持续 30s
-hey -c 100 -z 30s http://localhost:8080/
-
-# 观察 Grafana 中两个实例的 RPS 是否均衡
+kind create cluster --name sre-demo
+docker build -t sre-demo-web:local ./web
+kind load docker-image sre-demo-web:local --name sre-demo
+kubectl apply -k k8s/overlays/local
+kubectl -n sre-demo get pods -w
+curl http://localhost:30080/health
 ```
 
-## 已知局限 & 后续规划
+## Reliability Features
 
-- [ ] 无 Kubernetes：受服务器资源限制，未部署 K8s；可用 `kind` 在本地模拟
-- [ ] 无 TLS：生产环境需在 Nginx 配置 Let's Encrypt 证书
-- [ ] MySQL 单点：可升级为主从复制或迁移至云数据库 RDS
-- [ ] 日志收集：Nginx JSON 日志已结构化，下一步接入 Loki 实现日志聚合
+- `Nginx` 使用 `least_conn`，降低慢请求集中压在单实例上的概率。
+- 应用区分 `/health` 和 `/ready`，避免数据库异常时继续接流量。
+- `Prometheus` 抓取应用、主机和 Nginx 指标，`Grafana` 自动导入数据源和基础 Dashboard。
+- 告警覆盖服务不可达、高 CPU、高 5xx 错误率和高延迟。
+- `Kubernetes` 清单包含 `Deployment`、`StatefulSet`、`Service`、`PodDisruptionBudget` 和低资源 overlay。
+
+## Project Structure
+
+```text
+.
+|-- web/                    Flask application
+|-- nginx/                  Nginx configuration
+|-- prometheus/             Prometheus scrape config and alert rules
+|-- monitoring/grafana/     Grafana provisioning and dashboard JSON
+|-- k8s/                    Base manifests and overlays
+|-- docs/                   Architecture, SLO, Kubernetes, resume notes
+|-- runbooks/               Incident handling playbooks
+|-- scripts/                Validation and smoke test scripts
+|-- docker-compose.yml
+`-- README.md
+```
+
+## Recommended Reading Order
+
+- [架构说明](docs/architecture.md)
+- [Kubernetes 部署说明](docs/kubernetes-deployment.md)
+- [SLO](docs/slo.md)
+- [简历/面试亮点](docs/resume-highlights.md)
+- [高错误率 Runbook](runbooks/high-error-rate.md)
+- [高延迟 Runbook](runbooks/high-latency.md)
+
+## What I Would Say In An Interview
+
+1. 这个项目最初部署在 2C2G 单机上，所以我优先选择了 Docker Compose，而不是为了“看起来高级”硬塞 Kubernetes。
+2. 我把健康检查、就绪检查、监控、告警、Runbook 和资源限制一起做出来，让它从“能跑”变成“能运维”。
+3. 后续如果要生产化，我会先把 MySQL 迁移到 RDS，再上多节点 Kubernetes，而不是继续让数据库和监控组件挤在同一台小机器上。
