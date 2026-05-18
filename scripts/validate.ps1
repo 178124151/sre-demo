@@ -1,12 +1,12 @@
 $ErrorActionPreference = "Stop"
 
-docker compose config | Out-Null
+$root = Split-Path -Parent $PSScriptRoot
 
-if (Get-Command kubectl -ErrorAction SilentlyContinue) {
-    kubectl kustomize k8s/overlays/local | Out-Null
-    kubectl kustomize k8s/overlays/aliyun-small | Out-Null
-} else {
-    Write-Host "kubectl not found; skipped kustomize validation"
+Push-Location $root
+try {
+    python -m py_compile web\app.py
+    docker compose --env-file .env.example config | Out-Null
+    Write-Host "Compose project validation completed"
+} finally {
+    Pop-Location
 }
-
-Write-Host "Validation completed"

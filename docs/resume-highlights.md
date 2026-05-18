@@ -2,22 +2,22 @@
 
 ## One-Line Summary
 
-Built an SRE-oriented demo service with Nginx, Flask, MySQL, Prometheus, Grafana, Docker Compose, and Kubernetes manifests, focused on observability, health checks, fault isolation, and low-resource deployment tradeoffs.
+Built an SRE-oriented demo service with Nginx, Flask, MySQL, Prometheus, Grafana, and Docker Compose, focused on observability, health checks, alerting, and operational troubleshooting.
 
 ## Resume Bullets
 
 - Designed and deployed a small web service behind Nginx with multi-instance Flask containers, MySQL persistence, and Prometheus/Grafana monitoring.
-- Implemented `/health`, `/ready`, and `/metrics` endpoints to support load balancer checks, Kubernetes probes, and service observability.
+- Implemented `/health`, `/ready`, and `/metrics` endpoints to support load balancer checks, service readiness, and observability.
 - Added structured Nginx access logging, Prometheus alert rules, SLO documentation, and incident runbooks for 5xx errors and high latency.
-- Built Kubernetes manifests with `Deployment`, `StatefulSet`, `Service`, `PodDisruptionBudget`, and Kustomize overlays for both local demo and 2C2G resource-constrained scenarios.
-- Documented why Docker Compose remained the practical production choice on a single low-spec server and how to evolve the system toward a more production-ready Kubernetes setup.
+- Built a one-command local demo flow with Docker Compose so the full service and observability stack can be shown reliably in interviews.
+- Documented deployment assumptions, operational signals, and failure-handling steps to show how the service would be run rather than only how it starts.
 
 ## Interview Framing
 
-1. Start with the constraint: the original environment was a single 2C2G Aliyun server.
-2. Explain the decision: Compose was the lowest-overhead production option under that constraint.
-3. Show the SRE thinking: health checks, readiness checks, alert rules, dashboards, runbooks, and resource limits.
-4. Show the growth path: local Kubernetes demo today, managed database and multi-node cluster later.
+1. Start with the system shape: Nginx in front, two Flask instances, one MySQL, plus Prometheus and Grafana.
+2. Explain the SRE thinking: separate health and readiness checks, observable request flow, and dashboard-backed alerting.
+3. Show how incidents would be handled: use Prometheus alerts, Grafana dashboards, and runbooks to narrow down whether failures are in app, proxy, or database.
+4. Emphasize delivery quality: one-command startup, repeatable validation, and a repo that is easy to demo live.
 
 ## What This Project Proves
 

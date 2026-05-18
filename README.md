@@ -1,19 +1,57 @@
 # SRE Demo
 
-一个面向 SRE/运维实习投递的演示项目：用一个小型 Web 服务，把负载均衡、健康检查、可观测性、告警、Runbook 和资源取舍串成一条完整链路。
+一个面向 SRE / 运维实习面试展示的完整项目。它用一套小型 Web 服务，把反向代理、健康检查、数据库依赖、指标采集、告警、Dashboard 和 Runbook 串成一条清晰的运维链路。
 
-项目最初运行在一台 2C2G 的阿里云服务器上，因此主部署方式选择了 `Docker Compose`。这次整理保留了这条更符合真实资源约束的落地路径，同时补上 `Kubernetes` 清单、`SLO`、告警规则和演示文档，让它既能讲“怎么跑”，也能讲“怎么运维”。
+这个仓库的最终版本只保留稳定、可重复演示的 Docker Compose 路径，避免在本地面试演示时被额外的编排环境问题拖住节奏。
 
-## Project Snapshot
+## 项目亮点
 
-- 网关：Nginx 反向代理 + `least_conn` 负载均衡
-- 应用：Flask + Gunicorn，暴露 `/health`、`/ready`、`/metrics`
-- 存储：MySQL 5.7
-- 监控：Prometheus + Grafana
-- 编排：Docker Compose + Kubernetes Kustomize overlays
-- 运维资产：告警规则、SLO、Runbook、自测脚本、CI 校验
+- Nginx 反向代理 + `least_conn` 负载均衡
+- 两个 Flask 应用实例
+- MySQL 持久化数据
+- Prometheus 指标采集与告警
+- Grafana 预置数据源和 Dashboard
+- `/health`、`/ready`、`/metrics` 三类可观测性入口
+- SLO、Runbook、验证脚本、冒烟脚本齐全
 
-## Architecture
+## 技术栈
+
+- Flask
+- Gunicorn
+- MySQL 5.7
+- Nginx
+- Docker Compose
+- Prometheus
+- Grafana
+
+## 一键启动
+
+推荐直接使用脚本启动：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-full-demo.ps1
+```
+
+脚本会优先读取仓库根目录下的 `.env`；如果没有，则回退到 `.env.example`。
+
+启动成功后访问：
+
+- Web: `http://localhost:8080`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+Grafana 默认账号信息来自环境文件：
+
+- 用户名：`admin`
+- 密码：查看 `.env` 或 `.env.example` 中的 `GRAFANA_PASSWORD`
+
+停止环境：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\stop-full-demo.ps1
+```
+
+## 服务架构
 
 ```mermaid
 flowchart LR
@@ -29,81 +67,62 @@ flowchart LR
     grafana["Grafana"] --> prometheus
 ```
 
-## Why This Project Is Worth Showing
+## 为什么这个项目适合面试
 
-- 不只是把服务跑起来，而是把“服务如何被观测、告警、排障”一起补齐。
-- 不硬上 Kubernetes，而是把 2C2G 单机的资源现实讲清楚，再给出可验证的迁移路径。
-- 不只写代码，也补了 Dashboard provisioning、SLO、Runbook 和配置校验，让仓库更接近真实团队资产。
+- 它不只是“服务能跑起来”，而是完整展示了“服务如何被观测、诊断和维护”。
+- 面试时可以直接从请求入口一路讲到应用、数据库、监控和告警。
+- 本地启动路径足够稳定，适合现场演示，不容易被环境波动打断。
+- 文档、告警和 Runbook 让项目更像一个可以被运维的系统，而不只是一个 demo。
 
-## Quick Start
+## 核心运维设计
 
-### Docker Compose
+- `Nginx` 使用 `least_conn`，降低慢请求集中压到单实例上的概率。
+- 应用同时暴露 `/health` 和 `/ready`，区分“进程活着”和“服务真正可接流量”。
+- `Prometheus` 采集应用、代理和节点指标。
+- `Grafana` 自动加载预置数据源和 Dashboard。
+- 告警规则覆盖服务不可达、高延迟、高 5xx 错误率等常见场景。
+- `Runbook` 提供了高错误率和高延迟的排障路径。
 
-```bash
-cp .env.example .env
-docker compose up -d --build
-curl http://localhost:8080/health
-curl http://localhost:8080/users
-```
-
-入口：
-
-- Web: `http://localhost:8080`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`
-
-Windows 下可以直接运行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
-```
-
-### Kubernetes Demo
-
-```bash
-kind create cluster --name sre-demo
-docker build -t sre-demo-web:local ./web
-kind load docker-image sre-demo-web:local --name sre-demo
-kubectl apply -k k8s/overlays/local
-kubectl -n sre-demo get pods -w
-curl http://localhost:30080/health
-```
-
-## Reliability Features
-
-- `Nginx` 使用 `least_conn`，降低慢请求集中压在单实例上的概率。
-- 应用区分 `/health` 和 `/ready`，避免数据库异常时继续接流量。
-- `Prometheus` 抓取应用、主机和 Nginx 指标，`Grafana` 自动导入数据源和基础 Dashboard。
-- 告警覆盖服务不可达、高 CPU、高 5xx 错误率和高延迟。
-- `Kubernetes` 清单包含 `Deployment`、`StatefulSet`、`Service`、`PodDisruptionBudget` 和低资源 overlay。
-
-## Project Structure
+## 项目结构
 
 ```text
 .
 |-- web/                    Flask application
 |-- nginx/                  Nginx configuration
-|-- prometheus/             Prometheus scrape config and alert rules
-|-- monitoring/grafana/     Grafana provisioning and dashboard JSON
-|-- k8s/                    Base manifests and overlays
-|-- docs/                   Architecture, SLO, Kubernetes, resume notes
-|-- runbooks/               Incident handling playbooks
-|-- scripts/                Validation and smoke test scripts
+|-- prometheus/             Prometheus config and alert rules
+|-- monitoring/grafana/     Grafana provisioning and dashboards
+|-- docs/                   Architecture, SLO, resume notes
+|-- runbooks/               Incident runbooks
+|-- scripts/                Start, stop, validate, smoke test scripts
 |-- docker-compose.yml
+|-- init.sql
 `-- README.md
 ```
 
-## Recommended Reading Order
+## 常用命令
 
-- [架构说明](docs/architecture.md)
-- [Kubernetes 部署说明](docs/kubernetes-deployment.md)
-- [SLO](docs/slo.md)
-- [简历/面试亮点](docs/resume-highlights.md)
-- [高错误率 Runbook](runbooks/high-error-rate.md)
-- [高延迟 Runbook](runbooks/high-latency.md)
+验证配置：
 
-## What I Would Say In An Interview
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\validate.ps1
+```
 
-1. 这个项目最初部署在 2C2G 单机上，所以我优先选择了 Docker Compose，而不是为了“看起来高级”硬塞 Kubernetes。
-2. 我把健康检查、就绪检查、监控、告警、Runbook 和资源限制一起做出来，让它从“能跑”变成“能运维”。
-3. 后续如果要生产化，我会先把 MySQL 迁移到 RDS，再上多节点 Kubernetes，而不是继续让数据库和监控组件挤在同一台小机器上。
+冒烟测试：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
+手动启动：
+
+```powershell
+docker compose --env-file .env.example up -d --build
+```
+
+## 推荐阅读顺序
+
+- [docs/architecture.md](/C:/Users/luci/Documents/Codex/2026-05-14/sre-sre-https-github-com-178124151/docs/architecture.md)
+- [docs/slo.md](/C:/Users/luci/Documents/Codex/2026-05-14/sre-sre-https-github-com-178124151/docs/slo.md)
+- [docs/resume-highlights.md](/C:/Users/luci/Documents/Codex/2026-05-14/sre-sre-https-github-com-178124151/docs/resume-highlights.md)
+- [runbooks/high-error-rate.md](/C:/Users/luci/Documents/Codex/2026-05-14/sre-sre-https-github-com-178124151/runbooks/high-error-rate.md)
+- [runbooks/high-latency.md](/C:/Users/luci/Documents/Codex/2026-05-14/sre-sre-https-github-com-178124151/runbooks/high-latency.md)

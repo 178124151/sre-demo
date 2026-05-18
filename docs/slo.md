@@ -24,4 +24,4 @@ For a 99.5% monthly availability target, the monthly error budget is about 3.6 h
 
 ## Non-Goals
 
-This demo does not claim multi-zone high availability on a 2C2G single server. The project documents the limitation and shows the path to production hardening.
+This demo does not claim multi-zone high availability or managed-database durability. The goal is to show strong local operational practice on a small service, not to simulate a full production platform.
